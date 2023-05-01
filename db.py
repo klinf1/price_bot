@@ -22,3 +22,12 @@ def get_current_data(id):
         return None, None
     con.close()
     return data[0], name
+
+
+def get_id_by_name(name):
+    con, cur = get_connection()
+    name = str(name)
+    query = "SELECT * from item_list WHERE name LIKE '%{}%'".format(name)
+    data = cur.execute(query).fetchall()
+    con.close()
+    return data
