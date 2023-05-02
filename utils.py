@@ -31,6 +31,13 @@ def slice_list(source, step):
     return output
 
 
+def get_avg(source, step):
+    sub_lists = [source[i:i+step] for i in range(0, len(source), step)]
+    print(sub_lists)
+    averages = [sum(sub_list) / len(sub_list) for sub_list in sub_lists]
+    return averages
+
+
 def graph(x_values, y_values, name, period, title):
     matplotlib.use('Agg')
     fig, ax = plt.subplots(figsize=(30, 18))

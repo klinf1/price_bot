@@ -51,17 +51,18 @@ def get_history_graph(id, period):
     y_values_price = [row[0]/10000 for row in data_price]
     x_values_amount = [row[1] for row in data_amount]
     y_values_amount = [row[0] for row in data_amount]
-    values = [x_values_price, x_values_amount, y_values_price, y_values_amount]
-    for item in values:
-        item.reverse()
     for i in range(len(x_values_price)):
         x_values_price[i] = utils.get_time(x_values_price[i])
         x_values_amount[i] = utils.get_time(x_values_amount[i])
     name = get_name(id, cur)
     x_values_price = utils.slice_list(x_values_price, step)
     x_values_amount = utils.slice_list(x_values_amount, step)
-    y_values_price = utils.slice_list(y_values_price, step)
-    y_values_amount = utils.slice_list(y_values_amount, step)
+    y_values_price = utils.get_avg(y_values_price, step)
+    y_values_amount = utils.get_avg(y_values_amount, step)
+    x_values_price.reverse()
+    y_values_price .reverse()
+    x_values_amount.reverse()
+    y_values_amount.reverse()
     con.close()
     file_price = utils.graph(x_values_price, y_values_price, name, period, 'Price')
     file_amount = utils.graph(x_values_amount, y_values_amount, name, period, 'Amount on sale')
