@@ -27,6 +27,7 @@ def get_time(input):
 
 def slice_list(source, step):
     output = list(itertools.islice(source, 0, None, step))
+    print(output)
     return output
 
 
