@@ -34,13 +34,13 @@ def get_id_by_name(name):
 
 def get_history_graph(id, period):
     con, cur = db_con.get_connection()
-    if period == 'Day':
+    if period == 'One day':
         limit = 24
         step = 1
-    if period == 'Week':
+    if period == '7 days':
         limit = 168
         step = 4
-    if period == 'Month':
+    if period == '30 days':
         limit = 5040
         step = 15
     query_price = 'SELECT lowest_price, time FROM {} ORDER BY time DESC LIMIT {}'.format(f'[{id}]', str(limit))

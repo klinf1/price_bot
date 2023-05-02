@@ -2,7 +2,8 @@ import os
 
 from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      ReplyKeyboardMarkup, InputMediaPhoto)
+                      ReplyKeyboardMarkup, InputMediaPhoto,
+                      ReplyKeyboardRemove)
 from telegram.ext import (Updater, CommandHandler,
                           CallbackQueryHandler, MessageHandler, Filters)
 
@@ -93,7 +94,7 @@ def history_function(update, context):
         context.user_data["state"] = BACK
         back_function(update, context)
     else:
-        keyboard = [['Day', 'Week', 'Month']]
+        keyboard = [['One day', '7 days', '30 days']]
         update.message.reply_text(
             'Please choose time period you like to see the data for',
             reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
@@ -104,15 +105,28 @@ def graph_function(update, context):
     id = context.user_data.get('requested_id')
     if not utils.check_id_list(id):
         update.message.reply_text(
-            messages.NOT_A_COMMODITY_ERROR
+            messages.NOT_A_COMMODITY_ERROR,
+            reply_markup=ReplyKeyboardRemove()
         )
     else:
         period = update.message.text
         files = db.get_history_graph(id, period)
         media = [InputMediaPhoto(open(file, 'rb')) for file in files]
         context.bot.send_media_group(
-            chat_id=update.effective_chat.id, media=media
+            chat_id=update.effective_chat.id,
+            media=media,
         )
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Never gonna give you up',
+            reply_markup=ReplyKeyboardRemove()
+        )
+        msg.delete()
+        if period == '7 days' or period == '30 days':
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=messages.AVG_REMINDER
+            )
         for file in files:
             os.remove(file)
     context.user_data.pop("requested_id", None)
@@ -153,7 +167,7 @@ def main():
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(MessageHandler(
-        Filters.regex("^(Day|Week|Month)$"), graph_function
+        Filters.regex("^(One day|7 days|30 days)$"), graph_function
     ))
     dispatcher.add_handler(MessageHandler(
         Filters.text & ~Filters.command, get_id

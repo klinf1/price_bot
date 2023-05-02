@@ -27,13 +27,11 @@ def get_time(input):
 
 def slice_list(source, step):
     output = list(itertools.islice(source, 0, None, step))
-    print(output)
     return output
 
 
 def get_avg(source, step):
     sub_lists = [source[i:i+step] for i in range(0, len(source), step)]
-    print(sub_lists)
     averages = [sum(sub_list) / len(sub_list) for sub_list in sub_lists]
     return averages
 
