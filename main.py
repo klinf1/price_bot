@@ -1,12 +1,14 @@
 import os
 
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
+                      ReplyKeyboardMarkup)
 from telegram.ext import (Updater, CommandHandler,
                           CallbackQueryHandler, MessageHandler, Filters)
 
 import db
 import messages
+import utils
 
 
 PRICE, SUBSCRIBE, HISTORY, BACK, SEARCH = range(5)
@@ -34,13 +36,13 @@ def button(update, context):
 
     if option == PRICE:
         context.user_data["state"] = PRICE
-        query.edit_message_text(text="Please provide the id parameter:")
+        query.edit_message_text(text=messages.ASK_FOR_ID)
     elif option == SUBSCRIBE:
         context.user_data["state"] = SUBSCRIBE
-        query.edit_message_text(text="Please provide the id parameter:")
+        query.edit_message_text(text=messages.ASK_FOR_ID)
     elif option == HISTORY:
         context.user_data["state"] = HISTORY
-        query.edit_message_text(text="Please provide the id parameter:")
+        query.edit_message_text(text=messages.ASK_FOR_ID)
     elif option == SEARCH:
         context.user_data['state'] = SEARCH
         query.edit_message_text(messages.SEARCH)
@@ -54,6 +56,7 @@ def get_id(update, context):
     elif state == SUBSCRIBE:
         sub_function(update, context)
     elif state == HISTORY:
+        context.user_data['requested_id'] = update.message.text
         history_function(update, context)
     elif state == SEARCH:
         search_function(update, context)
@@ -64,12 +67,12 @@ def price_function(update, context):
     id = update.message.text
     data, name = db.get_current_data(id)
     if data:
-        message = (f'Data for {name[0]} at {data[4]} server time.\n'
+        message = (f'Data for {name} at {data[4]} server time.\n'
                    f'Price: {data[1]/10000} gold\n'
                    f'Amount: {data[2]}\n'
                    f'Sellers: {data[3]}')
     else:
-        message = 'The item with the id you provided is not a commodity!'
+        message = messages.NOT_A_COMMODITY_ERROR
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
     context.user_data["state"] = BACK
     back_function(update, context)
@@ -82,7 +85,34 @@ def sub_function(update, context):
 
 
 def history_function(update, context):
-    update.message.reply_text('This function is currently in development!')
+    id = context.user_data.get('requested_id')
+    if utils.check_id_list(id) is False:
+        update.message.reply_text(
+            messages.NOT_A_COMMODITY_ERROR
+        )
+        context.user_data["state"] = BACK
+        back_function(update, context)
+    else:
+        keyboard = [['Day', 'Week', 'Month']]
+        update.message.reply_text(
+            'Please choose time period you like to see the data for',
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        )
+
+
+def graph_function(update, context):
+    id = context.user_data.get('requested_id')
+    if not utils.check_id_list(id):
+        update.message.reply_text(
+            messages.NOT_A_COMMODITY_ERROR
+        )
+    else:
+        period = update.message.text
+        file_name = db.get_history_graph(id, period)
+        with open(file_name, 'rb') as f:
+            update.message.reply_photo(f)
+        os.remove(file_name)
+    context.user_data.pop("requested_id", None)
     context.user_data["state"] = BACK
     back_function(update, context)
 
@@ -119,6 +149,9 @@ def main():
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button))
+    dispatcher.add_handler(MessageHandler(
+        Filters.regex("^(Day|Week|Month)$"), graph_function
+    ))
     dispatcher.add_handler(MessageHandler(
         Filters.text & ~Filters.command, get_id
     ))
