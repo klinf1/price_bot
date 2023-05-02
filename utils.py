@@ -38,7 +38,7 @@ def get_avg(source, step):
 
 def graph(x_values, y_values, name, period, title):
     matplotlib.use('Agg')
-    fig, ax = plt.subplots(figsize=(30, 18))
+    fig, ax = plt.subplots(figsize=(35, 18))
     plt.xticks(fontsize=20)
     plt.yticks(fontsize=20)
     plt.plot(x_values, y_values)
