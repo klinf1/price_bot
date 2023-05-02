@@ -65,6 +65,7 @@ def get_history_graph(id, period):
     name = get_name(id, cur)
     con.close()
     matplotlib.use('Agg')
+    plt.rcParams["figure.figsize"] = (20, 20)
     plt.plot(x_values, y_values)
     plt.xlabel('Time')
     plt.ylabel('Price')
