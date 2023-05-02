@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      ReplyKeyboardMarkup)
+                      ReplyKeyboardMarkup, InputMediaPhoto)
 from telegram.ext import (Updater, CommandHandler,
                           CallbackQueryHandler, MessageHandler, Filters)
 
@@ -108,10 +108,13 @@ def graph_function(update, context):
         )
     else:
         period = update.message.text
-        file_name = db.get_history_graph(id, period)
-        with open(file_name, 'rb') as f:
-            update.message.reply_photo(f)
-        os.remove(file_name)
+        files = db.get_history_graph(id, period)
+        media = [InputMediaPhoto(open(file, 'rb')) for file in files]
+        context.bot.send_media_group(
+            chat_id=update.effective_chat.id, media=media
+        )
+        for file in files:
+            os.remove(file)
     context.user_data.pop("requested_id", None)
     context.user_data["state"] = BACK
     back_function(update, context)

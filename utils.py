@@ -1,9 +1,17 @@
 from datetime import datetime
-import db
+import os
+import random
+import string
+
+import matplotlib
+from matplotlib import pyplot as plt
+
+import db_con
+import itertools
 
 
 def check_id_list(item_id):
-    con, cur = db.get_connection()
+    con, cur = db_con.get_connection()
     id_list = [str(id[0]) for id in cur.execute('SELECT id FROM item_list')]
     con.close()
     if item_id not in id_list:
@@ -14,4 +22,32 @@ def check_id_list(item_id):
 def get_time(input):
     dt = datetime.strptime(input, '%Y-%m-%d %H:%M:%S')
     dt = datetime.strftime(dt, '%d.%m %H:%M')
-    return str(dt)
+    return str(dt).replace(' ', '\n')
+
+
+def slice_list(source, step):
+    output = list(itertools.islice(source, 0, None, step))
+    return output
+
+
+def graph(x_values, y_values, name, period, title):
+    matplotlib.use('Agg')
+    fig, ax = plt.subplots(figsize=(30, 18))
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.plot(x_values, y_values)
+    plt.xlabel('Time', fontsize=30)
+    plt.ylabel(title, fontsize=30)
+    plt.title(f'{title} of {name} over {period.lower()}', fontsize=40)
+    for i in range(len(x_values)):
+        ax.text(x_values[i], y_values[i], y_values[i], size=20)
+    plt.grid()
+    if not os.path.exists('graphs'):
+        os.mkdir('graphs')
+    random_name = ''.join(
+        random.choice(string.ascii_lowercase) for i in range(8)
+    )
+    filename = f'graphs/{random_name}.png'
+    plt.savefig(filename, dpi=150)
+    plt.close()
+    return filename
