@@ -19,17 +19,7 @@ load_dotenv()
 
 
 def start(update: Update, context: CallbackContext):
-    keyboard = [
-        [InlineKeyboardButton("Price", callback_data=str(PRICE)),
-         InlineKeyboardButton("Subscriptions", callback_data=str(SUBSCRIBE)),
-         InlineKeyboardButton("History", callback_data=str(HISTORY)),
-         InlineKeyboardButton('Search for id', callback_data=str(SEARCH))]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
-        "Please choose one of the following options:",
-        reply_markup=reply_markup
-    )
+    main_menu(update, context)
 
 
 def main_menu(update: Update, context: CallbackContext):
@@ -42,7 +32,7 @@ def main_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Please choose one of the following options:",
+        text=messages.CHOSE_ONE,
         reply_markup=reply_markup
     )
 
@@ -59,7 +49,7 @@ def subs_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(sub_menu_keys)
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Choose one:',
+        text=messages.CHOSE_ONE,
         reply_markup=reply_markup
     )
 
