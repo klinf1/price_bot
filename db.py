@@ -45,28 +45,34 @@ def get_history_graph(id, period):
         step = 15
     query_price = 'SELECT lowest_price, time FROM {} ORDER BY time DESC LIMIT {}'.format(f'[{id}]', str(limit))
     query_amount = 'SELECT amount_on_sale, time FROM {} ORDER BY time DESC LIMIT {}'.format(f'[{id}]', str(limit))
+    query_sellers = 'SELECT sellers, time from {} ORDER BY time DESC LIMIT {}'.format(f'[{id}]', str(limit))
     data_price = cur.execute(query_price).fetchall()
     data_amount = cur.execute(query_amount).fetchall()
+    data_sellers = cur.execute(query_sellers).fetchall()
     x_values_price = [row[1] for row in data_price]
     y_values_price = [round(row[0]/10000, 2) for row in data_price]
-    x_values_amount = [row[1] for row in data_amount]
+    x_values_amount = x_values_price
     y_values_amount = [round(row[0], 0) for row in data_amount]
+    x_values_sellers = x_values_price
+    y_values_sellers = [round(row[0], 0) for row in data_sellers]
     for i in range(len(x_values_price)):
         x_values_price[i] = utils.get_time(x_values_price[i])
-        x_values_amount[i] = utils.get_time(x_values_amount[i])
     name = get_name(id, cur)
     x_values_price = utils.slice_list(x_values_price, step)
-    x_values_amount = utils.slice_list(x_values_amount, step)
     y_values_price = utils.get_avg(y_values_price, step)
     y_values_amount = utils.get_avg(y_values_amount, step)
+    y_values_sellers = utils.get_avg(y_values_sellers, step)
     x_values_price.reverse()
     y_values_price .reverse()
-    x_values_amount.reverse()
     y_values_amount.reverse()
+    y_values_sellers.reverse()
+    x_values_sellers = x_values_price
+    x_values_amount = x_values_price
     con.close()
     file_price = utils.graph(x_values_price, y_values_price, name, period, 'Price')
     file_amount = utils.graph(x_values_amount, y_values_amount, name, period, 'Amount on sale')
-    return file_price, file_amount
+    file_sellers = utils.graph(x_values_sellers, y_values_sellers, name, period, 'Sellers')
+    return file_price, file_amount, file_sellers
 
 
 def get_subs(chat_id):
