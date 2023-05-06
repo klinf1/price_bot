@@ -3,24 +3,25 @@ import os
 from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
                       ReplyKeyboardMarkup, InputMediaPhoto,
-                      ReplyKeyboardRemove)
+                      ReplyKeyboardRemove, Update)
 from telegram.ext import (Updater, CommandHandler,
-                          CallbackQueryHandler, MessageHandler, Filters)
+                          CallbackQueryHandler, MessageHandler,
+                          Filters, CallbackContext)
 
 import db
 import messages
 import utils
 
 
-PRICE, SUBSCRIBE, HISTORY, BACK, SEARCH = range(5)
+PRICE, SUBSCRIBE, HISTORY, BACK, SEARCH, SUB, UNSUB, LIST_SUBS = range(8)
 
 load_dotenv()
 
 
-def start(update, context):
+def start(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Price", callback_data=str(PRICE)),
-         InlineKeyboardButton("Subscribe", callback_data=str(SUBSCRIBE)),
+         InlineKeyboardButton("Subscriptions", callback_data=str(SUBSCRIBE)),
          InlineKeyboardButton("History", callback_data=str(HISTORY)),
          InlineKeyboardButton('Search for id', callback_data=str(SEARCH))]
     ]
@@ -31,8 +32,41 @@ def start(update, context):
     )
 
 
-def button(update, context):
+def main_menu(update: Update, context: CallbackContext):
+    keyboard = [
+        [InlineKeyboardButton("Price", callback_data=str(PRICE)),
+         InlineKeyboardButton("Subscriptions", callback_data=str(SUBSCRIBE)),
+         InlineKeyboardButton("History", callback_data=str(HISTORY)),
+         InlineKeyboardButton('Search for id', callback_data=str(SEARCH))]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Please choose one of the following options:",
+        reply_markup=reply_markup
+    )
+
+
+def subs_menu(update: Update, context: CallbackContext):
+    sub_menu_keys = [[InlineKeyboardButton('My subscriptions',
+                                           callback_data=str(LIST_SUBS))],
+                     [InlineKeyboardButton('Subscribe',
+                                           callback_data=str(SUB))],
+                     [InlineKeyboardButton('Unsubscribe',
+                                           callback_data=str(UNSUB))],
+                     [InlineKeyboardButton('Back',
+                                           callback_data=str(BACK))]]
+    reply_markup = InlineKeyboardMarkup(sub_menu_keys)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Choose one:',
+        reply_markup=reply_markup
+    )
+
+
+def button(update: Update, context: CallbackContext):
     query = update.callback_query
+    query.answer()
     option = int(query.data)
 
     if option == PRICE:
@@ -40,31 +74,59 @@ def button(update, context):
         query.edit_message_text(text=messages.ASK_FOR_ID)
     elif option == SUBSCRIBE:
         context.user_data["state"] = SUBSCRIBE
-        query.edit_message_text(text=messages.ASK_FOR_ID)
+        query.message.delete()
+        subs_menu(update, context)
     elif option == HISTORY:
         context.user_data["state"] = HISTORY
         query.edit_message_text(text=messages.ASK_FOR_ID)
     elif option == SEARCH:
         context.user_data['state'] = SEARCH
         query.edit_message_text(messages.SEARCH)
+    elif option == LIST_SUBS:
+        query.message.delete()
+        data = db.list_subs(update.effective_chat.id)
+        context.bot.send_message(
+            update.effective_chat.id,
+            'Your subscriptions:'
+        )
+        for item in data:
+            if item:
+                str_data = (f'Id: {item[0]} \nName: {item[1]}\n',
+                            f'Class: {item[2]}\nSubclass: {item[3]}\n')
+                context.bot.send_message(
+                    update.effective_chat.id,
+                    ''.join(str_data)
+                )
+        return subs_menu(update, context)
+    elif option == SUB:
+        context.user_data['state'] = SUB
+        query.edit_message_text(text=messages.ASK_FOR_ID)
+    elif option == UNSUB:
+        context.user_data['state'] = UNSUB
+        query.edit_message_text(text=messages.ASK_FOR_ID)
+    elif option == BACK:
+        query.message.delete()
+        return main_menu(update, context)
+
     return option
 
 
-def get_id(update, context):
+def get_id(update: Update, context: CallbackContext):
     state = context.user_data.get("state", None)
     if state == PRICE:
         price_function(update, context)
-    elif state == SUBSCRIBE:
-        sub_function(update, context)
     elif state == HISTORY:
         context.user_data['requested_id'] = update.message.text
         history_function(update, context)
     elif state == SEARCH:
         search_function(update, context)
-    context.user_data.pop("state", None)
+    elif state == SUB:
+        subscribe(update, context)
+    elif state == UNSUB:
+        unsubscribe(update, context)
 
 
-def price_function(update, context):
+def price_function(update: Update, context: CallbackContext):
     id = update.message.text
     data, name = db.get_current_data(id)
     if data:
@@ -75,24 +137,46 @@ def price_function(update, context):
     else:
         message = messages.NOT_A_COMMODITY_ERROR
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
-    context.user_data["state"] = BACK
-    back_function(update, context)
+    main_menu(update, context)
 
 
-def sub_function(update, context):
-    update.message.reply_text('This function is currently in development!')
-    context.user_data["state"] = BACK
-    back_function(update, context)
+def subscribe(update: Update, context: CallbackContext):
+    if update.message.text in db.get_subs(update.effective_chat.id):
+        update.message.reply_text('You are already subscribed!')
+    elif utils.check_id_list(update.message.text) is False:
+        update.message.reply_text(
+            messages.NOT_A_COMMODITY_ERROR
+        )
+    else:
+        db.add_sub(update.effective_chat.id, update.message.text)
+        update.message.reply_text(
+            f'You are now subscribed to {update.message.text}'
+        )
+    return subs_menu(update, context)
 
 
-def history_function(update, context):
+def unsubscribe(update: Update, context: CallbackContext):
+    if utils.check_id_list(update.message.text) is False:
+        update.message.reply_text(
+            messages.NOT_A_COMMODITY_ERROR
+        )
+    elif update.message.text not in db.get_subs(update.effective_chat.id):
+        update.message.reply_text('You are not subscribed!')
+    else:
+        db.delete_sub(update.effective_chat.id, update.message.text)
+        update.message.reply_text(
+            f'You have unsubscribed from {update.message.text}'
+        )
+    return subs_menu(update, context)
+
+
+def history_function(update: Update, context: CallbackContext):
     id = context.user_data.get('requested_id')
     if utils.check_id_list(id) is False:
         update.message.reply_text(
             messages.NOT_A_COMMODITY_ERROR
         )
-        context.user_data["state"] = BACK
-        back_function(update, context)
+        main_menu(update, context)
     else:
         keyboard = [['One day', '7 days', '30 days']]
         update.message.reply_text(
@@ -101,7 +185,7 @@ def history_function(update, context):
         )
 
 
-def graph_function(update, context):
+def graph_function(update: Update, context: CallbackContext):
     id = context.user_data.get('requested_id')
     if not utils.check_id_list(id):
         update.message.reply_text(
@@ -118,7 +202,7 @@ def graph_function(update, context):
         )
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Never gonna give you up',
+            text='Nothing to see here',
             reply_markup=ReplyKeyboardRemove()
         )
         msg.delete()
@@ -130,11 +214,10 @@ def graph_function(update, context):
         for file in files:
             os.remove(file)
     context.user_data.pop("requested_id", None)
-    context.user_data["state"] = BACK
-    back_function(update, context)
+    main_menu(update, context)
 
 
-def search_function(update, context):
+def search_function(update: Update, context: CallbackContext):
     name = update.message.text
     data = db.get_id_by_name(name)
     if data:
@@ -151,14 +234,7 @@ def search_function(update, context):
         update.message.reply_text(
             'Sorry, I could not find an item with the name like this'
         )
-    context.user_data["state"] = BACK
-    back_function(update, context)
-
-
-def back_function(update, context):
-    state = context.user_data.get("state", None)
-    if state == BACK:
-        start(update, context)
+    main_menu(update, context)
 
 
 def main():
