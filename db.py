@@ -48,9 +48,9 @@ def get_history_graph(id, period):
     data_price = cur.execute(query_price).fetchall()
     data_amount = cur.execute(query_amount).fetchall()
     x_values_price = [row[1] for row in data_price]
-    y_values_price = [row[0]/10000 for row in data_price]
+    y_values_price = [round(row[0]/10000, 2) for row in data_price]
     x_values_amount = [row[1] for row in data_amount]
-    y_values_amount = [row[0] for row in data_amount]
+    y_values_amount = [round(row[0], 0) for row in data_amount]
     for i in range(len(x_values_price)):
         x_values_price[i] = utils.get_time(x_values_price[i])
         x_values_amount[i] = utils.get_time(x_values_amount[i])
@@ -67,3 +67,39 @@ def get_history_graph(id, period):
     file_price = utils.graph(x_values_price, y_values_price, name, period, 'Price')
     file_amount = utils.graph(x_values_amount, y_values_amount, name, period, 'Amount on sale')
     return file_price, file_amount
+
+
+def get_subs(chat_id):
+    con, cur = db_con.get_connection()
+    cur.execute('CREATE TABLE if NOT EXISTS user_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id NOT NULL, item_id NOT NULL)')
+    con.commit()
+    tuples = cur.execute('SELECT item_id FROM user_subs WHERE chat_id=?', [chat_id, ]).fetchall()
+    sub_ids = [id[0] for id in tuples]
+    con.close()
+    return sub_ids
+
+
+def add_sub(chat_id, item_id):
+    con, cur = db_con.get_connection()
+    cur.execute('CREATE TABLE if NOT EXISTS user_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id NOT NULL, item_id NOT NULL)')
+    cur.execute('INSERT INTO user_subs (chat_id, item_id) VALUES (?,?)', [chat_id, item_id])
+    con.commit()
+    con.close()
+
+
+def delete_sub(chat_id, item_id):
+    con, cur = db_con.get_connection()
+    cur.execute('DELETE from user_subs WHERE chat_id=? AND item_id=?', [chat_id, item_id])
+    con.commit()
+    con.close()
+
+
+def list_subs(chat_id):
+    sub_ids = get_subs(chat_id)
+    to_return = []
+    con, cur = db_con.get_connection()
+    for id in sub_ids:
+        info = cur.execute('SELECT * from item_list WHERE id=?', [id, ]).fetchone()
+        to_return.append(info)
+    con.close()
+    return to_return
