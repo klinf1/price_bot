@@ -34,7 +34,7 @@ def get_id_by_name(name):
 
 def get_history_graph(id, period):
     con, cur = db_con.get_connection()
-    if period == 'One day':
+    if period == 'Last day':
         limit = 24
         step = 1
     if period == '7 days':
@@ -50,18 +50,16 @@ def get_history_graph(id, period):
     data_amount = cur.execute(query_amount).fetchall()
     data_sellers = cur.execute(query_sellers).fetchall()
     x_values_price = [row[1] for row in data_price]
-    y_values_price = [round(row[0]/10000, 2) for row in data_price]
-    x_values_amount = x_values_price
-    y_values_amount = [round(row[0], 0) for row in data_amount]
-    x_values_sellers = x_values_price
-    y_values_sellers = [round(row[0], 0) for row in data_sellers]
+    y_values_price = [row[0]/10000 for row in data_price]
+    y_values_amount = [row[0] for row in data_amount]
+    y_values_sellers = [row[0] for row in data_sellers]
     for i in range(len(x_values_price)):
         x_values_price[i] = utils.get_time(x_values_price[i])
     name = get_name(id, cur)
     x_values_price = utils.slice_list(x_values_price, step)
-    y_values_price = utils.get_avg(y_values_price, step)
-    y_values_amount = utils.get_avg(y_values_amount, step)
-    y_values_sellers = utils.get_avg(y_values_sellers, step)
+    y_values_price = utils.get_avg(y_values_price, step, 2)
+    y_values_amount = utils.get_avg(y_values_amount, step, 0)
+    y_values_sellers = utils.get_avg(y_values_sellers, step, 0)
     x_values_price.reverse()
     y_values_price .reverse()
     y_values_amount.reverse()
@@ -72,6 +70,29 @@ def get_history_graph(id, period):
     file_price = utils.graph(x_values_price, y_values_price, name, period, 'Price')
     file_amount = utils.graph(x_values_amount, y_values_amount, name, period, 'Amount on sale')
     file_sellers = utils.graph(x_values_sellers, y_values_sellers, name, period, 'Sellers')
+    return file_price, file_amount, file_sellers
+
+
+def get_exact_date_graphs(id, date):
+    con, cur = db_con.get_connection()
+    query_price = "SELECT lowest_price, time FROM {} WHERE time LIKE ? ORDER BY time ASC".format(f'[{id}]')
+    query_amount = 'SELECT amount_on_sale, time FROM {} WHERE time LIKE ? ORDER BY time ASC'.format(f'[{id}]')
+    query_sellers = 'SELECT sellers, time FROM {} WHERE time LIKE ? ORDER BY time ASC'.format(f'[{id}]')
+    data_price = cur.execute(query_price, ('%'+str(date)+'%', )).fetchall()
+    data_amount = cur.execute(query_amount, ('%'+str(date)+'%', )).fetchall()
+    data_sellers = cur.execute(query_sellers, ('%'+str(date)+'%', )).fetchall()
+    name = get_name(id, cur)
+    x_values_price = [row[1] for row in data_price]
+    y_values_price = [round(row[0]/10000, 2) for row in data_price]
+    y_values_amount = [round(row[0], 0) for row in data_amount]
+    y_values_sellers = [round(row[0], 0) for row in data_sellers]
+    for i in range(len(x_values_price)):
+        x_values_price[i] = utils.get_time(x_values_price[i])
+    x_values_sellers = x_values_price
+    x_values_amount = x_values_price
+    file_price = utils.graph(x_values_price, y_values_price, name, date, 'Price')
+    file_amount = utils.graph(x_values_amount, y_values_amount, name, date, 'Amount on sale')
+    file_sellers = utils.graph(x_values_sellers, y_values_sellers, name, date, 'Sellers')
     return file_price, file_amount, file_sellers
 
 

@@ -19,6 +19,15 @@ def check_id_list(item_id):
     return True
 
 
+def check_date(id, date):
+    con, cur = db_con.get_connection()
+    query = 'SELECT * FROM {} WHERE time LIKE ?'.format(f'[{id}]')
+    data = cur.execute(query, ('%'+str(date)+'%', )).fetchall()
+    if data:
+        return True
+    return False
+
+
 def get_time(input):
     dt = datetime.strptime(input, '%Y-%m-%d %H:%M:%S')
     dt = datetime.strftime(dt, '%d.%m %H:%M')
@@ -30,9 +39,11 @@ def slice_list(source, step):
     return output
 
 
-def get_avg(source, step):
+def get_avg(source, step, digits):
     sub_lists = [source[i:i+step] for i in range(0, len(source), step)]
-    averages = [sum(sub_list) / len(sub_list) for sub_list in sub_lists]
+    averages = [round(
+        sum(sub_list) / len(sub_list), digits
+    ) for sub_list in sub_lists]
     return averages
 
 

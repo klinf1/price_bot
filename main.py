@@ -2,8 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      ReplyKeyboardMarkup, InputMediaPhoto,
-                      ReplyKeyboardRemove, Update)
+                      InputMediaPhoto, Update)
 from telegram.ext import (Updater, CommandHandler,
                           CallbackQueryHandler, MessageHandler,
                           Filters, CallbackContext)
@@ -14,6 +13,7 @@ import utils
 
 
 PRICE, SUBSCRIBE, HISTORY, BACK, SEARCH, SUB, UNSUB, LIST_SUBS = range(8)
+LAST_DAY, LAST_WEEK, LAST_MONTH, EXACT = range(8, 12)
 
 load_dotenv()
 
@@ -23,6 +23,7 @@ def start(update: Update, context: CallbackContext):
 
 
 def main_menu(update: Update, context: CallbackContext):
+    context.user_data.pop('State', None)
     keyboard = [
         [InlineKeyboardButton("Price", callback_data=str(PRICE)),
          InlineKeyboardButton("Subscriptions", callback_data=str(SUBSCRIBE)),
@@ -47,6 +48,25 @@ def subs_menu(update: Update, context: CallbackContext):
                      [InlineKeyboardButton('Back',
                                            callback_data=str(BACK))]]
     reply_markup = InlineKeyboardMarkup(sub_menu_keys)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=messages.CHOSE_ONE,
+        reply_markup=reply_markup
+    )
+
+
+def history_menu(update: Update, context: CallbackContext):
+    keyboard = [[InlineKeyboardButton('Last day',
+                                      callback_data=str(LAST_DAY))],
+                [InlineKeyboardButton('7 days',
+                                      callback_data=str(LAST_WEEK))],
+                [InlineKeyboardButton('30 days',
+                                      callback_data=str(LAST_MONTH))],
+                [InlineKeyboardButton('Exact day',
+                                      callback_data=str(EXACT))],
+                [InlineKeyboardButton('Back',
+                                      callback_data=str(BACK))]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=messages.CHOSE_ONE,
@@ -94,6 +114,26 @@ def button(update: Update, context: CallbackContext):
     elif option == UNSUB:
         context.user_data['state'] = UNSUB
         query.edit_message_text(text=messages.ASK_FOR_ID)
+    elif option == LAST_DAY:
+        context.user_data['state'] = LAST_DAY
+        context.user_data['history'] = 'Last day'
+        query.message.delete()
+        return graph_function(update, context)
+    elif option == LAST_WEEK:
+        context.user_data['state'] = LAST_WEEK
+        context.user_data['history'] = '7 days'
+        query.message.delete()
+        return graph_function(update, context)
+    elif option == LAST_MONTH:
+        context.user_data['state'] = LAST_MONTH
+        context.user_data['history'] = '30 days'
+        query.message.delete()
+        return graph_function(update, context)
+    elif option == EXACT:
+        context.user_data['state'] = EXACT
+        query.edit_message_text(
+            text='Please, provide the date in YYYY-MM-DD format'
+        )
     elif option == BACK:
         query.message.delete()
         return main_menu(update, context)
@@ -114,6 +154,11 @@ def get_id(update: Update, context: CallbackContext):
         subscribe(update, context)
     elif state == UNSUB:
         unsubscribe(update, context)
+    else:
+        update.message.reply_text(
+            'Unexpected input! Returning to main menu'
+        )
+        main_menu(update, context)
 
 
 def price_function(update: Update, context: CallbackContext):
@@ -127,6 +172,7 @@ def price_function(update: Update, context: CallbackContext):
     else:
         message = messages.NOT_A_COMMODITY_ERROR
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+    context.user_data.pop('State', None)
     main_menu(update, context)
 
 
@@ -162,17 +208,13 @@ def unsubscribe(update: Update, context: CallbackContext):
 
 def history_function(update: Update, context: CallbackContext):
     id = context.user_data.get('requested_id')
-    if utils.check_id_list(id) is False:
-        update.message.reply_text(
+    if not utils.check_id_list(id):
+        context.bot.send_message(
+            update.effective_chat.id,
             messages.NOT_A_COMMODITY_ERROR
         )
-        main_menu(update, context)
-    else:
-        keyboard = [['One day', '7 days', '30 days']]
-        update.message.reply_text(
-            'Please choose time period you like to see the data for',
-            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-        )
+        return main_menu(update, context)
+    history_menu(update, context)
 
 
 def graph_function(update: Update, context: CallbackContext):
@@ -180,10 +222,9 @@ def graph_function(update: Update, context: CallbackContext):
     if not utils.check_id_list(id):
         update.message.reply_text(
             messages.NOT_A_COMMODITY_ERROR,
-            reply_markup=ReplyKeyboardRemove()
         )
     else:
-        period = update.message.text
+        period = context.user_data.get('history')
         files = db.get_history_graph(id, period)
         media = [InputMediaPhoto(open(file, 'rb')) for file in files]
         context.bot.send_media_group(
@@ -193,7 +234,6 @@ def graph_function(update: Update, context: CallbackContext):
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='Nothing to see here',
-            reply_markup=ReplyKeyboardRemove()
         )
         msg.delete()
         if period == '7 days' or period == '30 days':
@@ -204,6 +244,29 @@ def graph_function(update: Update, context: CallbackContext):
         for file in files:
             os.remove(file)
     context.user_data.pop("requested_id", None)
+    context.user_data.pop('State', None)
+    main_menu(update, context)
+
+
+def exact_graph_function(update: Update, context: CallbackContext):
+    date = update.message.text
+    id = context.user_data.get('requested_id')
+    if not utils.check_date(id, date):
+        context.bot.send_message(
+            update.effective_chat.id,
+            'There is no data availible for that day.'
+        )
+    else:
+        files = db.get_exact_date_graphs(id, date)
+        media = [InputMediaPhoto(open(file, 'rb')) for file in files]
+        context.bot.send_media_group(
+            chat_id=update.effective_chat.id,
+            media=media,
+        )
+        for file in files:
+            os.remove(file)
+    context.user_data.pop("requested_id", None)
+    context.user_data.pop('State', None)
     main_menu(update, context)
 
 
@@ -224,6 +287,7 @@ def search_function(update: Update, context: CallbackContext):
         update.message.reply_text(
             'Sorry, I could not find an item with the name like this'
         )
+    context.user_data.pop('State', None)
     main_menu(update, context)
 
 
@@ -233,8 +297,15 @@ def main():
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(MessageHandler(
-        Filters.regex("^(One day|7 days|30 days)$"), graph_function
+        Filters.regex(
+            '^(19|20)\d\d[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])$'
+        ),
+        exact_graph_function
     ))
+    dispatcher.add_handler(MessageHandler(
+        Filters.regex("^(Last day|7 days|30 days)$"), graph_function
+    ))
+    dispatcher.add_handler
     dispatcher.add_handler(MessageHandler(
         Filters.text & ~Filters.command, get_id
     ))
